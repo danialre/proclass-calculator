@@ -9,22 +9,29 @@ Driver = namedtuple('Driver', 'sccaclass,number,driver,time,penalties')
 
 def save_pax(paxdata, year):
     # cache pax data so we don't bombard solotime with queries
-    with open(f'pax/{year}.txt', 'w') as paxf:
+    with open(os.path.join("pax", f"{year}.txt"), 'w') as paxf:
         for classname in paxdata:
             paxf.write(f"{classname} {paxdata[classname]:.3f}\n")
 
 def read_pax(year):
     # read pax data from a local copy
     paxdata = {}
-    with open(f'pax/{year}.txt') as paxf:
+    with open(os.path.join("pax", f"{year}.txt")) as paxf:
         for line in paxf.readlines():
             line = line.split()
             paxdata[line[0]] = float(line[1])
     return paxdata
 
+def is_float(string):
+    try:
+        float(string)
+        return True
+    except ValueError:
+        return False
+
 def get_pax(year):
     # get (download or read) PAX data for a particular year
-    if not os.path.exists(f"pax/{year}.txt"):
+    if not os.path.exists(os.path.join("pax", f"{year}.txt")):
         # no cached data available, get data from solotime.info
         print(f"Accessing {BASE_URL.format(year=year)}")
         tables = pandas.read_html(BASE_URL.format(year=year))
@@ -33,7 +40,8 @@ def get_pax(year):
         classname = None
         for row in tables[0].itertuples():
             for item in row:
-                if isinstance(item, str):
+                # isinstance() is sometimes faulty for mod classes, manually check
+                if isinstance(item, str) and not is_float(item):
                     # this item is a string, must be a class name
                     classname = item.lower()
                 elif float(item) <= 1.0 and classname:
@@ -67,10 +75,10 @@ def fastest(results, year, pax=True):
                     if len(time) > 1:
                         time[1] = time[1].lower()
                         # penalty detected, apply
-                        if time[1] == 'dnf' and not penalty and not fastest:
+                        if time[1] in ['dnf', 'off'] and not penalty and not fastest:
                             penalty = 'dnf'
                             continue    # no time set, so set penalty as DNF and move on
-                        elif time[1] == 'dnf':
+                        elif time[1] in ['dnf', 'off']:
                             continue    # DNF run with an existing time, skip
                         elif not time[1]:
                             time = float(time[0])   # there is a plus but no actual penalty, skip
@@ -87,12 +95,15 @@ def fastest(results, year, pax=True):
                 if isinstance(fastest, float) and pax:
                     # apply PAX multiplier if enabled
                     try:
-                        # round times to the thousandth, and look for class (without ladies designation)
-                        fastest = round(fastest * pax[row["Class"].lower().replace('l', '')], 3)
+                        # round times to the thousandth, and look for class (without ladies or novice designation)
+                        fastest = round(fastest * pax[row["Class"].lower().replace('l', '').replace('n', '')], 3)
                     except KeyError:
                         print(f"Warning: could not find class \"{row['Class']}\" ({row['Driver']}) for PE {pe}")
                         pass    # couldn't find the class (fake class??), so don't adjust time
-                paxed[pe].append(Driver(row["Class"], row["#"], row["Driver"], fastest, penalty))
+                # Fix blank names and normalize drivers (sometimes results show up with (last, first), others show with (first last))
+                driver = (str(row["Driver"]) if str(row["Driver"]) != 'nan' else '')
+                driver = ' '.join(reversed(driver.split(','))).strip()
+                paxed[pe].append(Driver(row["Class"], int(row["#"]), driver, fastest, penalty))
         except:
             print(f'Exception for PE {pe}')
             raise

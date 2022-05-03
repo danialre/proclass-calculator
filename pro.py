@@ -3,32 +3,34 @@
 import argparse
 import parser
 import pax
+from datetime import datetime
+from os import path, mkdir
 
-def write_results(results, min_events=0):
+def write_results(results, year, min_events=0):
+    # make sure year folder is created
+    if not path.exists(path.join("results", str(year))):
+        mkdir(path.join("results", str(year)))
     # save results to a csv file
     for event in results.keys():
-        with open(f"results/pe{event}.csv", 'w') as csvf:
+        with open(path.join("results", str(year), f"pe{event}.csv"), 'w') as csvf:
             csvf.write("Position,Class,Number,Driver,Fastest Time (inc. cones),Penalties\n")
             for position, result in enumerate(results[event], start=1):
                 # fix drivernames so there's no comma
-                drivername = ' '.join(reversed(result.driver.split(','))).strip()
-                csvf.write(f"{position},{result.sccaclass},{result.number},{drivername},{result.time},{result.penalties}\n")
+                csvf.write(f"{position},{result.sccaclass},{result.number},{result.driver},{result.time},{result.penalties}\n")
 
     # also write season standings
-    with open(f"results/year.csv", 'w') as csvf:
-        overall = season(results, min_events=min_events) 
+    with open(path.join("results", str(year), "year.csv"), 'w') as csvf:
+        overall = season(results, min_events=min_events)
         csvf.write(f"Position,Driver,Total Points (top {min_events}),Avg Points (top {min_events}),Total Points,Avg Points,Events\n")
         for position, driver in enumerate(overall, start=1):
-            drivername = ' '.join(reversed(driver[0].split(','))).strip()
-            csvf.write(f"{position},{drivername},{driver[1]},{driver[2]},{driver[3]},{driver[4]},{driver[5]}\n")
-    
+            csvf.write(f"{position},{driver[0]},{driver[1]},{driver[2]},{driver[3]},{driver[4]},{driver[5]}\n")
+
     # just for fun, also generate one sorted by average points instead of total points
-    with open(f"results/year-average.csv", 'w') as csvf:
-        overall = season(results, min_events=min_events, sort_avg=True) 
+    with open(path.join("results", str(year), "year-average.csv"), 'w') as csvf:
+        overall = season(results, min_events=min_events, sort_avg=True)
         csvf.write(f"Position,Driver,Total Points (top {min_events}),Avg Points (top {min_events}),Total Points,Avg Points,Events\n")
         for position, driver in enumerate(overall, start=1):
-            drivername = ' '.join(reversed(driver[0].split(','))).strip()
-            csvf.write(f"{position},{drivername},{driver[1]},{driver[2]},{driver[3]},{driver[4]},{driver[5]}\n")
+            csvf.write(f"{position},{driver[0]},{driver[1]},{driver[2]},{driver[3]},{driver[4]},{driver[5]}\n")
 
 def season(results, min_events=0, sort_avg=False):
     # calculate season standings
@@ -68,7 +70,13 @@ def season(results, min_events=0, sort_avg=False):
 def main(year, min_events):
     results = parser.get(year)
     firstthree = pax.fastest(results, year)
-    write_results(firstthree, min_events)
+    write_results(firstthree, year, min_events)
 
 if __name__ == '__main__':
-    main(2021, 11) # 11 events before drops
+    argparser = argparse.ArgumentParser()
+    argparser.add_argument("year", type=int, default=datetime.now().year,
+                        help="Year to read results, defaults to current year")
+    # 11 events before drops
+    argparser.add_argument("--drops", '-d', type=int, default=11, help="Number of minimum events before drops")
+    args = argparser.parse_args()
+    main(args.year, args.drops)
