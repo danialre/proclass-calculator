@@ -65,6 +65,8 @@ def fastest(results, year, pax=True):
             for index, row in result.iterrows():
                 fastest = None
                 penalty = None
+                if row["Run 1.."] == "Run 1..":
+                    continue # skip header rows
                 # check first three runs only (nationals style)
                 for run in [row["Run 1.."], row["Run 2.."], row["Run 3.."]]:
                     if pandas.isna(run):
@@ -96,7 +98,11 @@ def fastest(results, year, pax=True):
                     # apply PAX multiplier if enabled
                     try:
                         # round times to the thousandth, and look for class (without ladies or novice designation)
-                        fastest = round(fastest * pax[row["Class"].lower().replace('l', '').replace('n', '')], 3)
+                        raceclass = row["Class"].lower().replace('l', '').replace('n', '')
+                        if (raceclass.startswith('cam') or raceclass.startswith('xs')) and '-' not in raceclass:
+                            # class is missing a hyphen, add it back in
+                            raceclass = f"{raceclass[:-1]}-{raceclass[-1]}"
+                        fastest = round(fastest * pax[raceclass], 3)
                     except KeyError:
                         print(f"Warning: could not find class \"{row['Class']}\" ({row['Driver']}) for PE {pe}")
                         pass    # couldn't find the class (fake class??), so don't adjust time

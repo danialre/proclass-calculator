@@ -33,15 +33,32 @@ def collect_events(year, force_update=False):
             # figure out which table has all the data - more than 20 rows (10 drivers) is good
             for table in tables:
                 if len(table) > 20:
+                    if 'Class' not in table.columns:
+                        # alternate format detected
+                        table = pandas.read_html(BASE_URL.format(year=year, event=pe), header=None)
+                        # classes have their own headings so make a new header
+                        new_header = ['Pos', 'Class', '#', 'Driver', 'Car', 'Color', 'Run 1..', 'Run 2..', 'Run 3..']
+                        # fill the rest of the column names with blanks
+                        new_header += ['R'] * (len(table.columns) - len(new_header))
+                        table.columns = new_header
                     results.append(table)
                     # also save for later
                     table.to_csv(f"{year}/pe{pe}.csv", index=False)
                     continue
         else:
             # otherwise read the saved csv of results
-            results.append(pandas.read_csv(BASE_FILE.format(year=year, event=pe)))
+            table = pandas.read_csv(BASE_FILE.format(year=year, event=pe))
+            if 'Class' not in table.columns:
+                # alternate format detected
+                table = pandas.read_csv(BASE_FILE.format(year=year, event=pe), header=None)
+                # classes have their own headings so make a new header
+                new_header = ['Pos', 'Class', '#', 'Driver', 'Car', 'Color', 'Run 1..', 'Run 2..', 'Run 3..']
+                # fill the rest of the column names with blanks
+                new_header += ['R'] * (len(table.columns) - len(new_header))
+                table.columns = new_header
+            results.append(table)
             cache_counter += 1
-    
+
     # make sure results are formatted properly
     for idx in range(len(results)):
         if 'Class' not in results[idx].columns:
@@ -55,7 +72,13 @@ def filter_tables(results):
     filtered = []
     for result in results:
         # dropna - drop excess run rows and only get first three runs
-        filtered.append(result.dropna(subset=['Class'])[["Class", "#", "Driver", "Run 1..", "Run 2..", "Run 3.."]])
+        try:
+            filtered.append(result.dropna(subset=['Class'])[["Class", "#", "Driver", "Run 1..", "Run 2..", "Run 3.."]])
+        except KeyError:
+            # alternate format detected, drop additional class headers
+            result = result.dropna(subset=['Class'])
+            result = result[result['Class'].str.contains('Total Entries') == False]
+            filtered.append(result.dropna(subset=['Class'])[["Class", "#", "Driver", "Run 1..", "Run 2..", "Run 3.."]])
     return filtered
 
 def get(year, force_update=False):
